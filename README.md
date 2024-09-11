@@ -1,2 +1,2 @@
-# rdca_to_fs_corresp
+# RDCA to FS correspondence mechanism.
 A correspondence procedure to generate FS spectra from RDCA CRM.
