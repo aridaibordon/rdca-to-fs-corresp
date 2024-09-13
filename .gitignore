@@ -1,0 +1,15 @@
+# virtual environment
+.env/
+
+# config files
+__pycache__/
+*.pyc
+
+# data
+out/
+plots/
+*.txt
+
+# test files
+test/
+test.py
