@@ -11,6 +11,21 @@ def get_fs_corresp_id(ion, id):
     return f"{ion}.{id}"
 
 
+def get_fs_corresp_states(abako_id: int, ion: int, fs_states: list, pop_list: list) -> list:
+    return [
+        {
+            "abako_id": abako_id,
+            "ion": ion,
+            "rdca_id": state["rdca_id"],
+            "fs_id": state["id"],
+            "E": state["E"],
+            "deg": state["deg"],
+            "pop": pop,
+        }
+        for state, pop in zip(fs_states, pop_list)
+    ]
+
+
 def are_equivalent(state1, state2):
     """Check equivalence between two given states"""
     keys = ["ncomplex", "sname", "name"]
@@ -57,10 +72,12 @@ def get_pop_corresp(path: str, temp: float):
     abako_df = read_lp(path)
 
     cion = -1
-    fs_corresp = []
+    corresp = {}
     for _, abako_state in abako_df.iterrows():
-        if ELEM_Z == abako_state["ion"]:
-            fs_corresp.append(
+        abako_id, ion = abako_state["id"], abako_state["ion"]
+
+        if ELEM_Z == ion:
+            corresp[abako_id] = [
                 {
                     "abako_id": abako_state["id"],
                     "ion": ELEM_Z,
@@ -70,28 +87,17 @@ def get_pop_corresp(path: str, temp: float):
                     "deg": 1,
                     "pop": abako_state["pop"],
                 }
-            )
+            ]
 
             break
 
-        if not abako_state["ion"] == cion:
-            cion = abako_state["ion"]
+        if not cion == ion:
+            cion = ion
             rdca_fname, _, fs_fname, _ = get_atomicdata_fnames(cion)
 
-            corresp = get_corresponding_states(rdca_fname, fs_fname)
+            fs_corresp = get_corresponding_states(rdca_fname, fs_fname)
 
-        new_pop, fs_states = compute_fs_populations(abako_state, corresp, temp)
-        for pop, state in zip(new_pop, fs_states):
-            fs_corresp.append(
-                {
-                    "abako_id": abako_state["id"],
-                    "ion": cion,
-                    "rdca_id": state["rdca_id"],
-                    "fs_id": state["id"],
-                    "E": state["E"],
-                    "deg": state["deg"],
-                    "pop": pop,
-                }
-            )
+        pop_list, fs_states = compute_fs_populations(abako_state, fs_corresp, temp)
+        corresp[abako_id] = get_fs_corresp_states(abako_id, ion, fs_states, pop_list)
 
-    return fs_corresp
+    return corresp

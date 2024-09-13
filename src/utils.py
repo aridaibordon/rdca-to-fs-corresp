@@ -6,7 +6,7 @@ ELEM = "Ar"
 ELEM_Z = 18
 
 # Default path
-DEFAULT_ATOMICDATA_PATH = "data/atomicdata"
+DEFAULT_ATOMICDATA_PATH = "data/fac"
 
 # Energy intervals for transdata (eV))
 ENERGY_LIMITS = (3000, 5000)

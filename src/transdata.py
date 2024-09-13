@@ -3,19 +3,17 @@ import pandas as pd
 from itertools import product
 
 from src.pop import get_pop_corresp
+from src.utils import DEFAULT_ATOMICDATA_PATH
 
-from fac_utils.read import read_tr
 from abako_utils.read import read_transdata, read_transdata_header, read_transdata_cond
+from fac_utils.read import read_tr, get_ein_dict
 
 
-def get_fs_transitions(low, upp, corresp_df) -> list[tuple[int, dict]]:
-    low_df = corresp_df[corresp_df["abako_id"] == low]
-    upp_df = corresp_df[corresp_df["abako_id"] == upp]
+def get_fs_transitions(low, upp, corresp) -> list[tuple[int, dict]]:
+    corresp_low_states = corresp[low]
+    corresp_upp_states = corresp[upp]
 
-    low_fs = [(index, row.to_dict()) for index, row in low_df.iterrows()]
-    upp_fs = [(index, row.to_dict()) for index, row in upp_df.iterrows()]
-
-    return list(product(low_fs, upp_fs))
+    return list(product(corresp_low_states, corresp_upp_states))
 
 
 def compute_einstein_coef(
@@ -35,19 +33,16 @@ def compute_einstein_coef(
     )
 
 
-def get_einstein_coef(lind, uind, tr_df):
-    tr_df = tr_df[(tr_df["upp"] == uind) & (tr_df["low"] == lind)]
-
-    if tr_df.empty:
-        return 0
-    return tr_df["ein"].iloc[0]
+def get_einstein_coef(lind, uind, ein_dict):
+    key = f"{uind:05d}-{lind:05d}"
+    return ein_dict.get(key, 0)
 
 
-def get_bb_transrow(lind, uind, lstate, ustate, rdca_transrow, tr_df) -> list:
+def get_bb_transrow(lstate, ustate, rdca_transrow, ein_dict) -> list:
+    """
     delta_E_rdca = rdca_transrow["deltaE"]
     delta_E_fs = ustate["E"] - lstate["E"]
 
-    """
     cein = compute_einstein_coef(
         delta_E_rdca,
         delta_E_fs,
@@ -59,18 +54,18 @@ def get_bb_transrow(lind, uind, lstate, ustate, rdca_transrow, tr_df) -> list:
     )
     """
 
-    cein = get_einstein_coef(lstate["fs_id"], ustate["fs_id"], tr_df)
+    ein = get_einstein_coef(lstate["fs_id"], ustate["fs_id"], ein_dict)
 
     return [
         rdca_transrow["ion"],
-        lind,
-        uind,
+        lstate["fs_id"],
+        ustate["fs_id"],
         lstate["deg"],
         ustate["deg"],
         lstate["pop"],
         ustate["pop"],
-        delta_E_fs,
-        cein,
+        ustate["E"] - lstate["E"],
+        ein,
         rdca_transrow["dop"],
         rdca_transrow["voi"],
         rdca_transrow["sta"],
@@ -98,9 +93,8 @@ def get_bf_transrow(lind, uind, lstate, ustate, rdca_transrow):
 def get_fs_transdata(path_to_lp, path_to_transdata):
     temp, _ = read_transdata_cond(path_to_transdata)
     rdca_transbb, rdca_transbf = read_transdata(path_to_transdata)
-    
+
     corresp = get_pop_corresp(path_to_lp, temp)
-    corresp_df = pd.DataFrame(corresp)
 
     cion = -1
     fs_transbb = []
@@ -108,20 +102,27 @@ def get_fs_transdata(path_to_lp, path_to_transdata):
         ion, low, upp = rdca_transrow["ion"], rdca_transrow["low"], rdca_transrow["upp"]
 
         if ion != cion:
-            tr_df = read_tr(f"data/atomicdata/Ar_{18-ion}_FS_0.tr")
+            tr_df = read_tr(f"{DEFAULT_ATOMICDATA_PATH}/Ar_{18-ion}_FS_0.tr")
+            ein_dict = get_ein_dict(tr_df)
 
-        fs_transitions = get_fs_transitions(low, upp, corresp_df)
+            cion = ion
+
+        fs_transitions = get_fs_transitions(low, upp, corresp)
         for transition in fs_transitions:
-            (lind, lstate), (uind, ustate) = transition
+            lstate, ustate = transition
 
             if ustate["E"] - lstate["E"] < 0:
                 ustate, lstate = lstate, ustate
 
             fs_transrow = get_bb_transrow(
-                lind, uind, lstate, ustate, rdca_transrow, tr_df
+                lstate,
+                ustate,
+                rdca_transrow,
+                ein_dict,
             )
             fs_transbb.append(fs_transrow)
 
+    """
     fs_transbf = []
     for _, rdca_transrow in rdca_transbf.iterrows():
         low, upp = rdca_transrow["low"], rdca_transrow["upp"]
@@ -135,6 +136,7 @@ def get_fs_transdata(path_to_lp, path_to_transdata):
 
             fs_transrow = get_bf_transrow(lind, uind, lstate, ustate, rdca_transrow)
             fs_transbf.append(fs_transrow)
+    """
 
     fkeys_bb = {
         "ion": int,
@@ -175,8 +177,6 @@ def get_fs_transdata(path_to_lp, path_to_transdata):
 def create_transdata_file(
     path_fs_transdata: str, path_rdca_lp: str, path_rdca_transdata: str
 ) -> None:
-    
-    get_fs_transdata(path_rdca_lp, path_rdca_transdata)
     fs_bbtrans, fs_bftrans = get_fs_transdata(path_rdca_lp, path_rdca_transdata)
 
     with open(path_fs_transdata, "w") as ftrans:
