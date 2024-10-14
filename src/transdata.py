@@ -6,7 +6,16 @@ from src.pop import get_pop_corresp
 from src.utils import DEFAULT_ATOMICDATA_PATH
 
 from abako_utils.read import read_transdata, read_transdata_header, read_transdata_cond
-from fac_utils.read import read_tr, get_ein_dict
+from fac_utils.read import read_tr
+
+
+def get_ein_dict(tr_df: pd.DataFrame) -> dict:
+    ein_dict = {}
+    for _, tr_row in tr_df.iterrows():
+        upp, low, ein = int(tr_row["upp"]), int(tr_row["low"]), tr_row["ein"]
+        ein_dict[f"{upp:05d}-{low:05d}"] = ein
+
+    return ein_dict
 
 
 def get_fs_transitions(low, upp, corresp) -> list[tuple[int, dict]]:
